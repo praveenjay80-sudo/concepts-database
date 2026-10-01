@@ -83,7 +83,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); line
 .tree-node .row.selected { background: var(--accent-soft); }
 .tree-node .row.selected .label { color: var(--accent); }
 .tree-node .toggle { width: 13px; text-align: center; color: var(--text-faint); font-size: 0.6rem; transition: transform .12s; flex-shrink: 0; }
-.tree-node .toggle.collapsed { transform: rotate(-90deg); }
+.tree-node .toggle:not(.collapsed) { transform: rotate(90deg); }
 .tree-node .label { font-family: var(--mono); color: var(--text); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-node .grain { font-size: 0.6rem; font-family: var(--mono); color: var(--text-faint); margin-left: auto; padding-left: 6px; text-transform: uppercase; letter-spacing: .04em; }
 .tree-children { display: none; margin-left: 0.5rem; padding-left: 0.6rem; border-left: 1px solid var(--border); }
@@ -145,6 +145,16 @@ h2.concept-title { font-family: var(--serif); font-size: 1.9rem; margin: 0 0 4px
   padding: 4px 11px; margin: 0 6px 6px 0; cursor: pointer;
 }
 .rel-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+.subtopics { margin-top: 22px; max-width: 72ch; }
+.subtopics h3 { font-family: var(--serif); font-size: 1.1rem; margin: 0 0 10px; }
+.subtopic-chip {
+  display: inline-block; font-family: var(--mono); font-size: 0.78rem; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px;
+  padding: 4px 11px; margin: 0 6px 6px 0; cursor: pointer;
+}
+.subtopic-chip:hover { border-color: var(--accent); color: var(--accent); }
+.subtopic-chip .g { color: var(--text-faint); font-size: 0.68rem; margin-left: 5px; }
 
 .reading-meta { color: var(--text-muted); font-family: var(--mono); font-size: 0.78rem; margin-bottom: 14px; }
 .section-block { margin-bottom: 20px; }
@@ -456,15 +466,28 @@ async function selectConcept(id) {
       detail = await resp.json();
       conceptCache.set(id, detail);
     }
-    renderExplain(detail);
+    renderExplain(detail, node);
   } catch (e) {
     output.innerHTML = `<div class="error">Could not load this concept: ${escHtml(e.message)}</div>`;
   }
 }
 
-function renderExplain(detail) {
+function renderSubtopicsHtml(node) {
+  const children = node.children || [];
+  if (children.length === 0) return '';
+  const sorted = children.slice().sort((a, b) => a.name.localeCompare(b.name));
+  let html = `<div class="subtopics"><h3>Subtopics (${children.length})</h3>`;
+  for (const c of sorted) {
+    html += `<span class="subtopic-chip" onclick="selectConcept('${c.id}')">${escHtml(c.name)}<span class="g">${c.grain}</span></span>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderExplain(detail, node) {
   const output = document.getElementById('explainOutput');
   let html = '';
+  html += renderSubtopicsHtml(node);
   const lenses = detail.lenses || {};
   if (lenses.plain) html += `<div class="lens"><h3>Plain</h3><p>${escHtml(lenses.plain)}</p></div>`;
   if (lenses.tech) html += `<div class="lens"><h3>Technical</h3><p>${escHtml(lenses.tech)}</p></div>`;
