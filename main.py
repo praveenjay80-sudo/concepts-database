@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -42,6 +42,15 @@ async def list_models():
 @app.get("/api/health")
 async def health():
     return {"ok": True, "concepts_loaded": len(DETAIL)}
+
+
+@app.middleware("http")
+async def no_cache_html(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith(".html") or path.endswith(".json"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
 
 
 app.mount("/", StaticFiles(directory=str(APP_DIR / "public"), html=True), name="static")

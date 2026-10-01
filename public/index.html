@@ -343,7 +343,11 @@ function renderNode(node, depth) {
   grain.textContent = hasChildren ? `${node.grain} · ${countNodes(node) - 1}` : node.grain;
   row.appendChild(grain);
 
-  row.onclick = () => selectConcept(node.id);
+  if (node.grain === 'UNIVERSE') {
+    row.onclick = () => toggle.onclick({ stopPropagation() {} });
+  } else {
+    row.onclick = () => selectConcept(node.id);
+  }
   div.appendChild(row);
 
   if (hasChildren) {
@@ -444,6 +448,11 @@ let conceptCache = new Map();
 async function selectConcept(id) {
   const node = BY_ID.get(id);
   if (!node) return;
+  if (node.grain === 'UNIVERSE') {
+    const row = rowById.get(id);
+    if (row) row.onclick();
+    return;
+  }
   selectedNode = node;
 
   if (selectedRow) selectedRow.classList.remove('selected');
