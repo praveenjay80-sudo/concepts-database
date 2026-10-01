@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Concepts Database</title>
+<style>
+:root {
+  --bg: #eef1f2;
+  --surface: #ffffff;
+  --surface-2: #f5f7f8;
+  --text: #1b2430;
+  --text-muted: #5b6672;
+  --text-faint: #8b95a0;
+  --accent: #a85d16;
+  --accent-soft: #f2e2cf;
+  --border: #d7dce0;
+  --border-strong: #b9c1c7;
+  --ok: #2e7d4f;
+  --err: #b3402a;
+  --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12181b; --surface: #1b2226; --surface-2: #171e21; --text: #e7e9e4;
+    --text-muted: #a2ada6; --text-faint: #6f7b74; --accent: #e3a73b; --accent-soft: #3a2f16;
+    --border: #2a3339; --border-strong: #38434a; --ok: #5fb98a; --err: #e08066;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12181b; --surface: #1b2226; --surface-2: #171e21; --text: #e7e9e4;
+  --text-muted: #a2ada6; --text-faint: #6f7b74; --accent: #e3a73b; --accent-soft: #3a2f16;
+  --border: #2a3339; --border-strong: #38434a; --ok: #5fb98a; --err: #e08066;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #eef1f2; --surface: #ffffff; --surface-2: #f5f7f8; --text: #1b2430;
+  --text-muted: #5b6672; --text-faint: #8b95a0; --accent: #a85d16; --accent-soft: #f2e2cf;
+  --border: #d7dce0; --border-strong: #b9c1c7; --ok: #2e7d4f; --err: #b3402a;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .001ms !important; transition-duration: .001ms !important; } }
+
+.header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 14px 22px; display: flex; align-items: baseline; gap: 14px; position: sticky; top: 0; z-index: 100;
+}
+.header h1 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; margin: 0; letter-spacing: -0.01em; }
+.header .sub { color: var(--text-muted); font-size: 0.78rem; font-family: var(--mono); }
+.header .spacer { flex: 1; }
+.theme-btn {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border-strong);
+  border-radius: 7px; padding: 6px 10px; cursor: pointer;
+}
+.theme-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.main { display: flex; max-width: 1760px; margin: 0 auto; }
+.sidebar {
+  width: 420px; min-width: 320px; border-right: 1px solid var(--border);
+  height: calc(100vh - 57px); overflow-y: auto; position: sticky; top: 57px; background: var(--surface);
+}
+.content { flex: 1; padding: 22px 30px 70px; min-width: 0; }
+
+.search-bar { padding: 12px 14px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 10; }
+.search-bar input {
+  width: 100%; background: var(--bg); border: 1px solid var(--border-strong);
+  border-radius: 7px; color: var(--text); padding: 8px 10px; font-family: var(--mono); font-size: 0.84rem;
+}
+.search-bar input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.stats { color: var(--text-faint); font-family: var(--mono); font-size: 0.68rem; padding: 6px 14px; letter-spacing: .03em; text-transform: uppercase; }
+
+#tree { padding: 4px 0 20px; }
+.tree-node .row { display: flex; align-items: center; padding: 3px 14px; gap: 5px; cursor: pointer; border-radius: 5px; }
+.tree-node .row:hover { background: var(--surface-2); }
+.tree-node .row.selected { background: var(--accent-soft); }
+.tree-node .row.selected .label { color: var(--accent); }
+.tree-node .toggle { width: 13px; text-align: center; color: var(--text-faint); font-size: 0.6rem; transition: transform .12s; flex-shrink: 0; }
+.tree-node .toggle.collapsed { transform: rotate(-90deg); }
+.tree-node .label { font-family: var(--mono); color: var(--text); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-node .grain { font-size: 0.6rem; font-family: var(--mono); color: var(--text-faint); margin-left: auto; padding-left: 6px; text-transform: uppercase; letter-spacing: .04em; }
+.tree-children { display: none; margin-left: 0.5rem; padding-left: 0.6rem; border-left: 1px solid var(--border); }
+.tree-children.open { display: block; }
+#tree > .tree-node > .row .label { font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: .03em; }
+.highlight .label { background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 3px; }
+.hidden-by-search { display: none !important; }
+
+.breadcrumb { font-family: var(--mono); color: var(--text-muted); font-size: 0.8rem; margin-bottom: 4px; }
+.breadcrumb b { color: var(--text); }
+.breadcrumb .crumb { cursor: pointer; }
+.breadcrumb .crumb:hover { color: var(--accent); }
+h2.concept-title { font-family: var(--serif); font-size: 1.9rem; margin: 0 0 4px; letter-spacing: -0.01em; text-wrap: balance; }
+.grain-pill {
+  display: inline-block; font-family: var(--mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 9px; margin-bottom: 10px;
+}
+.empty-state { color: var(--text-muted); padding: 60px 0; text-align: center; font-family: var(--serif); font-size: 1.1rem; }
+
+.action-row { display: flex; gap: 10px; margin: 16px 0 22px; flex-wrap: wrap; }
+.btn {
+  font-family: var(--mono); font-size: 0.8rem; letter-spacing: .02em;
+  color: var(--text); background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 9px 16px; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-primary { background: var(--accent); color: var(--surface); border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { opacity: .9; color: var(--surface); }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.tab {
+  padding: 8px 14px; cursor: pointer; color: var(--text-muted); font-size: 0.82rem;
+  font-family: var(--mono); border-bottom: 2px solid transparent; letter-spacing: .02em;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.lens { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+.lens h3 { font-family: var(--mono); font-size: 0.7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.lens p { margin: 0; font-size: 0.98rem; line-height: 1.65; }
+
+.article { max-width: 72ch; }
+.article h2 { font-family: var(--serif); font-size: 1.25rem; margin: 24px 0 10px; color: var(--text); }
+.article p { font-size: 0.98rem; line-height: 1.7; margin: 0 0 14px; }
+.dig { color: var(--accent); cursor: pointer; border-bottom: 1px dotted var(--accent); }
+.dig:hover { background: var(--accent-soft); }
+
+.related { margin-top: 26px; max-width: 72ch; }
+.related h3 { font-family: var(--serif); font-size: 1.1rem; margin: 0 0 10px; }
+.related-group { margin-bottom: 12px; }
+.related-group .rel-label {
+  font-family: var(--mono); font-size: 0.66rem; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-faint); display: block; margin-bottom: 5px;
+}
+.rel-chip {
+  display: inline-block; font-family: var(--mono); font-size: 0.78rem; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+  padding: 4px 11px; margin: 0 6px 6px 0; cursor: pointer;
+}
+.rel-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+.reading-meta { color: var(--text-muted); font-family: var(--mono); font-size: 0.78rem; margin-bottom: 14px; }
+.section-block { margin-bottom: 20px; }
+.section-block h3 { font-family: var(--serif); font-size: 1.05rem; color: var(--text); margin: 0 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.book-item { padding: 10px 0; border-bottom: 1px dashed var(--border); }
+.book-item:last-child { border-bottom: none; }
+.book-title { font-weight: 600; }
+.book-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 2px; font-family: var(--mono); }
+.book-why { margin-top: 4px; font-size: 0.9rem; color: var(--text); }
+
+.loading { color: var(--text-muted); font-family: var(--mono); font-size: 0.85rem; padding: 20px 0; }
+.error { color: var(--err); font-family: var(--mono); font-size: 0.85rem; padding: 12px 0; }
+.raw-output { white-space: pre-wrap; font-family: var(--mono); font-size: 0.82rem; background: var(--surface-2); padding: 14px; border-radius: 8px; border: 1px solid var(--border); }
+
+::selection { background: var(--accent-soft); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Concepts Database</h1>
+  <span class="sub" id="headerStats">loading…</span>
+  <span class="spacer"></span>
+  <button class="theme-btn" id="themeToggle">Theme</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search concepts…" oninput="onSearch()" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="stats" id="stats"></div>
+    <div id="tree"></div>
+  </div>
+
+  <div class="content">
+    <div id="emptyState" class="empty-state">Select a concept from the tree to read its explanation or generate a reading list.</div>
+
+    <div id="conceptPanel" style="display:none">
+      <div class="breadcrumb" id="breadcrumb"></div>
+      <div class="grain-pill" id="grainPill"></div>
+      <h2 class="concept-title" id="conceptTitle"></h2>
+
+      <div class="action-row">
+        <button class="btn" id="readingBtn" onclick="runReadingList()">Generate reading list</button>
+        <button class="btn" id="exportBtn" onclick="exportReadingList()">Export reading list (.md)</button>
+        <select id="modelSelect" class="btn" style="cursor:pointer"></select>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="explain" onclick="switchTab('explain')">Explain</div>
+        <div class="tab" data-tab="reading" onclick="switchTab('reading')">Reading list</div>
+      </div>
+
+      <div class="tab-content active" id="tab-explain">
+        <div id="explainOutput"></div>
+      </div>
+
+      <div class="tab-content" id="tab-reading">
+        <div id="readingOutput"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// THEME
+// ============================================================
+(function () {
+  const root = document.documentElement;
+  const saved = localStorage.getItem('theme');
+  if (saved) root.setAttribute('data-theme', saved);
+  document.getElementById('themeToggle').onclick = () => {
+    const current = root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = current === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  };
+})();
+
+// ============================================================
+// DATA
+// ============================================================
+let TREE = null;      // array of universe root nodes
+let BY_ID = new Map(); // id -> node (from tree, has children ids as objects already nested)
+let PARENT_OF = new Map(); // id -> parent id
+let ALL_FLAT = [];    // flat list for search
+
+async function loadData() {
+  const [tree] = await Promise.all([
+    fetch('/fock_tree.json').then(r => r.json()),
+  ]);
+  TREE = tree;
+  indexTree();
+  renderTree();
+  const total = ALL_FLAT.length;
+  document.getElementById('stats').textContent = `${total.toLocaleString()} concepts loaded`;
+  document.getElementById('headerStats').textContent = `${total.toLocaleString()} concepts · ${TREE.length} universes · fock.space`;
+}
+
+function indexTree() {
+  function walk(node, parentId) {
+    BY_ID.set(node.id, node);
+    if (parentId) PARENT_OF.set(node.id, parentId);
+    ALL_FLAT.push(node);
+    for (const c of node.children) walk(c, node.id);
+  }
+  for (const root of TREE) walk(root, null);
+}
+
+function pathToRoot(id) {
+  const path = [];
+  let cur = id;
+  while (cur) {
+    const n = BY_ID.get(cur);
+    if (!n) break;
+    path.unshift(n);
+    cur = PARENT_OF.get(cur);
+  }
+  return path;
+}
+
+// ============================================================
+// TREE RENDERING
+// ============================================================
+function countNodes(node) {
+  let n = 1;
+  for (const c of node.children || []) n += countNodes(c);
+  return n;
+}
+
+function renderTree() {
+  const container = document.getElementById('tree');
+  container.innerHTML = '';
+  for (const node of TREE) container.appendChild(renderNode(node, 0));
+}
+
+let selectedRow = null;
+const rowById = new Map();
+
+function renderNode(node, depth) {
+  const div = document.createElement('div');
+  div.className = 'tree-node';
+  div.dataset.name = node.name.toLowerCase();
+  div.dataset.id = node.id;
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.style.paddingLeft = (10 + depth * 14) + 'px';
+  rowById.set(node.id, row);
+
+  const children = node.children || [];
+  const hasChildren = children.length > 0;
+
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle collapsed';
+  toggle.textContent = '▸';
+  toggle.onclick = (e) => {
+    e.stopPropagation();
+    const childContainer = div.querySelector(':scope > .tree-children');
+    if (childContainer) {
+      const isOpen = childContainer.classList.toggle('open');
+      toggle.classList.toggle('collapsed', !isOpen);
+    }
+  };
+  if (!hasChildren) toggle.style.visibility = 'hidden';
+  row.appendChild(toggle);
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = node.name;
+  row.appendChild(label);
+
+  const grain = document.createElement('span');
+  grain.className = 'grain';
+  grain.textContent = hasChildren ? `${node.grain} · ${countNodes(node) - 1}` : node.grain;
+  row.appendChild(grain);
+
+  row.onclick = () => selectConcept(node.id);
+  div.appendChild(row);
+
+  if (hasChildren) {
+    const childContainer = document.createElement('div');
+    childContainer.className = 'tree-children';
+    for (const child of children) childContainer.appendChild(renderNode(child, depth + 1));
+    div.appendChild(childContainer);
+  }
+
+  return div;
+}
+
+function expandToNode(id) {
+  const path = pathToRoot(id);
+  for (const n of path) {
+    const row = rowById.get(n.id);
+    if (!row) continue;
+    const node = row.closest('.tree-node');
+    const parentChildren = node.parentElement;
+    if (parentChildren && parentChildren.classList.contains('tree-children')) {
+      parentChildren.classList.add('open');
+      const parentToggle = parentChildren.previousElementSibling ? parentChildren.previousElementSibling.querySelector('.toggle') : null;
+    }
+  }
+  // Also open the node's own children container's ancestors properly
+  let cur = id;
+  while (cur) {
+    const row = rowById.get(cur);
+    if (row) {
+      const treeNode = row.closest('.tree-node');
+      const cc = treeNode.parentElement;
+      if (cc && cc.classList.contains('tree-children')) {
+        cc.classList.add('open');
+        const toggleBtn = cc.previousElementSibling && cc.previousElementSibling.querySelector ? cc.previousElementSibling.querySelector('.toggle') : null;
+        if (toggleBtn) toggleBtn.classList.remove('collapsed');
+      }
+    }
+    cur = PARENT_OF.get(cur);
+  }
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function onSearch() {
+  const query = document.getElementById('searchInput').value.toLowerCase().trim();
+  const allNodes = document.querySelectorAll('.tree-node');
+  const stats = document.getElementById('stats');
+
+  if (!query) {
+    allNodes.forEach(n => { n.classList.remove('hidden-by-search'); n.classList.remove('highlight'); });
+    allNodes.forEach(n => {
+      const tc = n.querySelector(':scope > .tree-children');
+      const tg = n.querySelector(':scope > .row > .toggle');
+      if (tc) { tc.classList.remove('open'); if (tg) tg.classList.add('collapsed'); }
+    });
+    stats.textContent = `${ALL_FLAT.length.toLocaleString()} concepts loaded`;
+    return;
+  }
+
+  allNodes.forEach(n => {
+    const tc = n.querySelector(':scope > .tree-children');
+    const tg = n.querySelector(':scope > .row > .toggle');
+    if (tc) { tc.classList.add('open'); if (tg) tg.classList.remove('collapsed'); }
+  });
+
+  let matchCount = 0;
+  allNodes.forEach(n => { n.classList.add('hidden-by-search'); n.classList.remove('highlight'); });
+  allNodes.forEach(n => {
+    const name = n.dataset.name || '';
+    if (name.includes(query)) {
+      matchCount++;
+      n.classList.remove('hidden-by-search');
+      n.classList.add('highlight');
+      let parent = n.parentElement;
+      while (parent && parent.id !== 'tree') {
+        if (parent.classList.contains('tree-node')) parent.classList.remove('hidden-by-search');
+        parent = parent.parentElement;
+      }
+    }
+  });
+  stats.textContent = `${matchCount} matches for "${query}"`;
+}
+
+// ============================================================
+// CONCEPT SELECTION
+// ============================================================
+let selectedNode = null;
+let lastReadingList = null;
+let conceptCache = new Map();
+
+async function selectConcept(id) {
+  const node = BY_ID.get(id);
+  if (!node) return;
+  selectedNode = node;
+
+  if (selectedRow) selectedRow.classList.remove('selected');
+  const row = rowById.get(id);
+  if (row) { row.classList.add('selected'); selectedRow = row; expandToNode(id); row.scrollIntoView({ block: 'nearest' }); }
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('conceptPanel').style.display = 'block';
+
+  const path = pathToRoot(id);
+  document.getElementById('breadcrumb').innerHTML = path.map((p, i) =>
+    i === path.length - 1 ? `<b>${escHtml(p.name)}</b>` : `<span class="crumb" onclick="selectConcept('${p.id}')">${escHtml(p.name)}</span>`
+  ).join(' &rsaquo; ');
+  document.getElementById('grainPill').textContent = node.grain + ' · ' + node.universe;
+  document.getElementById('conceptTitle').textContent = node.name;
+
+  document.getElementById('readingOutput').innerHTML = '';
+  lastReadingList = null;
+  switchTab('explain');
+
+  const output = document.getElementById('explainOutput');
+  output.innerHTML = `<div class="loading">Loading…</div>`;
+  try {
+    let detail = conceptCache.get(id);
+    if (!detail) {
+      const resp = await fetch(`/api/concept/${id}`);
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      detail = await resp.json();
+      conceptCache.set(id, detail);
+    }
+    renderExplain(detail);
+  } catch (e) {
+    output.innerHTML = `<div class="error">Could not load this concept: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderExplain(detail) {
+  const output = document.getElementById('explainOutput');
+  let html = '';
+  const lenses = detail.lenses || {};
+  if (lenses.plain) html += `<div class="lens"><h3>Plain</h3><p>${escHtml(lenses.plain)}</p></div>`;
+  if (lenses.tech) html += `<div class="lens"><h3>Technical</h3><p>${escHtml(lenses.tech)}</p></div>`;
+
+  html += '<div class="article">';
+  for (const block of (detail.article || [])) {
+    if (block.type === 'heading') {
+      const tag = 'h2';
+      html += `<${tag}>${escHtml(block.text)}</${tag}>`;
+    } else if (block.type === 'paragraph') {
+      html += '<p>';
+      for (const span of (block.spans || [])) {
+        if (span.type === 'dig' && span.target_id) {
+          html += `<span class="dig" onclick="selectConcept('${span.target_id}')">${escHtml(span.text)}</span>`;
+        } else {
+          html += escHtml(span.text);
+        }
+      }
+      html += '</p>';
+    }
+  }
+  html += '</div>';
+
+  const related = detail.related || [];
+  if (related.length > 0) {
+    const groups = {};
+    const order = [];
+    for (const r of related) {
+      if (!groups[r.label]) { groups[r.label] = []; order.push(r.label); }
+      groups[r.label].push(r);
+    }
+    html += '<div class="related"><h3>Related concepts</h3>';
+    for (const label of order) {
+      html += `<div class="related-group"><span class="rel-label">${escHtml(label)}</span>`;
+      for (const r of groups[label]) {
+        html += `<span class="rel-chip" onclick="selectConcept('${r.id}')">${escHtml(r.name)}</span>`;
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  output.innerHTML = html;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ============================================================
+// READING LIST
+// ============================================================
+async function loadModels() {
+  try {
+    const data = await fetch('/api/models').then(r => r.json());
+    const sel = document.getElementById('modelSelect');
+    const saved = localStorage.getItem('model');
+    sel.innerHTML = data.models.map(m => `<option value="${m}">${m}</option>`).join('');
+    sel.value = (saved && data.models.includes(saved)) ? saved : data.default;
+    sel.onchange = () => localStorage.setItem('model', sel.value);
+  } catch (e) {}
+}
+
+async function runReadingList() {
+  if (!selectedNode) return;
+  switchTab('reading');
+  const output = document.getElementById('readingOutput');
+  output.innerHTML = `<div class="loading">Generating reading list for "${escHtml(selectedNode.name)}"… this can take 30-60s.</div>`;
+
+  try {
+    const path = pathToRoot(selectedNode.id).map(n => n.name);
+    const children = (selectedNode.children || []).map(c => c.name);
+    const model = document.getElementById('modelSelect').value;
+    const resp = await fetch('/api/reading-list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedNode.id, name: selectedNode.name, path, children, model }),
+    });
+    if (!resp.ok) throw new Error(`${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+    const data = await resp.json();
+    lastReadingList = data;
+
+    if (!data.items || data.items.length === 0) {
+      output.innerHTML = `<div class="raw-output">${escHtml(data.raw || 'No structured items returned.')}</div>`;
+      return;
+    }
+    renderReadingList(data.items, data.topic);
+  } catch (e) {
+    output.innerHTML = `<div class="error">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderReadingList(items, topic) {
+  const output = document.getElementById('readingOutput');
+  const sections = {};
+  const order = [];
+  for (const item of items) {
+    const sec = item.section || 'Other';
+    if (!sections[sec]) { sections[sec] = []; order.push(sec); }
+    sections[sec].push(item);
+  }
+
+  let html = `<div class="reading-meta">${items.length} items for "${escHtml(topic)}"</div>`;
+  for (const section of order) {
+    html += `<div class="section-block"><h3>${escHtml(section)} (${sections[section].length})</h3>`;
+    for (const item of sections[section]) {
+      html += `<div class="book-item">
+        <div class="book-title">${escHtml(item.title)}</div>
+        <div class="book-meta">${escHtml(item.author)} ${item.year ? '· ' + escHtml(item.year) : ''} · ${escHtml(item.type)} · ${escHtml(item.level)}</div>
+        <div class="book-why">${escHtml(item.why)}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  output.innerHTML = html;
+}
+
+function exportReadingList() {
+  if (!lastReadingList || !lastReadingList.items || lastReadingList.items.length === 0) {
+    alert('Generate a reading list first.');
+    return;
+  }
+  let md = `# Reading List: ${lastReadingList.topic}\n\n`;
+  const sections = {};
+  const order = [];
+  for (const item of lastReadingList.items) {
+    const sec = item.section || 'Other';
+    if (!sections[sec]) { sections[sec] = []; order.push(sec); }
+    sections[sec].push(item);
+  }
+  for (const section of order) {
+    md += `## ${section}\n\n`;
+    for (const item of sections[section]) {
+      md += `### ${item.title}\n`;
+      md += `- **Author:** ${item.author || 'N/A'}\n`;
+      md += `- **Year:** ${item.year || 'N/A'}\n`;
+      md += `- **Type:** ${item.type || 'N/A'}\n`;
+      md += `- **Level:** ${item.level || 'N/A'}\n`;
+      md += `- **Why:** ${item.why || 'N/A'}\n\n`;
+    }
+  }
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reading-list-${lastReadingList.topic.toLowerCase().replace(/\s+/g, '-')}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadData();
+loadModels();
+fetch('/api/health').then(r => r.json()).then(d => {
+  if (!d.openrouter_configured) {
+    document.getElementById('headerStats').textContent += ' · ⚠ OpenRouter key not configured on server';
+  }
+}).catch(() => {});
+</script>
+</body>
+</html>
