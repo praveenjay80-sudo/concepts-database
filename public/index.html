@@ -61,6 +61,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); line
   border-radius: 7px; padding: 6px 10px; cursor: pointer;
 }
 .theme-btn:hover { color: var(--accent); border-color: var(--accent); }
+.key-input {
+  font-family: var(--mono); font-size: 0.76rem; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 7px;
+  padding: 6px 10px; width: 230px;
+}
+.key-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .main { display: flex; max-width: 1760px; margin: 0 auto; }
 .sidebar {
@@ -178,6 +184,8 @@ h2.concept-title { font-family: var(--serif); font-size: 1.9rem; margin: 0 0 4px
   <h1>Concepts Database</h1>
   <span class="sub" id="headerStats">loading…</span>
   <span class="spacer"></span>
+  <input type="password" id="apiKeyInput" placeholder="OpenRouter key (sk-or-v1-...)" class="key-input" autocomplete="off" spellcheck="false">
+  <span class="sub">stored in your browser only</span>
   <button class="theme-btn" id="themeToggle">Theme</button>
 </div>
 
@@ -553,23 +561,79 @@ async function loadModels() {
   } catch (e) {}
 }
 
+const READING_LIST_PROMPT = (name, path, children, summary) => `You are an expert academic librarian. Generate an EXHAUSTIVE reading list for the concept: "${name}"
+
+Context:
+- Path in the atlas: ${path}
+- Related sub-concepts: ${children}
+- Summary: ${summary}
+
+Generate a structured reading list with these sections:
+1. FOUNDATIONAL TEXTS (3-5 books) - The canonical texts every student must read
+2. INTRODUCTORY (3-5 books/courses) - Accessible entry points for beginners
+3. INTERMEDIATE (5-8 books) - Core textbooks for undergraduate/early graduate level
+4. ADVANCED (5-8 books/papers) - Graduate-level and specialist texts
+5. RESEARCH FRONTIER (3-5 seminal papers/recent works) - Cutting-edge and highly cited
+6. CROSS-DISCIPLINARY (3-5 works) - Essential readings from adjacent fields
+7. REFERENCE WORKS (2-4) - Handbooks, encyclopedias, companions
+8. JOURNALS (3-5) - Top journals in the field
+9. ONLINE RESOURCES (3-5) - Key websites, databases, lecture series
+
+For each item, format as:
+**[Title]** by [Author] ([Year])
+Type: [Book/Textbook/Paper/Journal/Course/Website]
+Level: [Foundational/Introductory/Intermediate/Advanced/Frontier]
+Why: [1-2 sentence justification]
+
+Be specific with real titles, real authors, real publication years. No placeholder text. If you are unsure about a specific title, omit it rather than guessing.
+
+Return ONLY a structured JSON array, no other text:
+[{"section": "...", "title": "...", "author": "...", "year": "...", "type": "...", "level": "...", "why": "..."}]`;
+
+function extractJsonArray(text) {
+  const m = text.match(/\[[\s\S]*\]/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (e) { return null; }
+}
+
 async function runReadingList() {
   if (!selectedNode) return;
   switchTab('reading');
   const output = document.getElementById('readingOutput');
+
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  if (!apiKey) {
+    output.innerHTML = `<div class="error">Enter your OpenRouter API key at the top of the page first (it's stored only in your browser, never sent to our server).</div>`;
+    return;
+  }
+
   output.innerHTML = `<div class="loading">Generating reading list for "${escHtml(selectedNode.name)}"… this can take 30-60s.</div>`;
 
   try {
-    const path = pathToRoot(selectedNode.id).map(n => n.name);
-    const children = (selectedNode.children || []).map(c => c.name);
+    const path = pathToRoot(selectedNode.id).map(n => n.name).join(' -> ');
+    const children = (selectedNode.children || []).map(c => c.name).join(', ') || 'none';
+    const detail = conceptCache.get(selectedNode.id);
+    const summary = (detail && detail.lenses && (detail.lenses.tech || detail.lenses.plain)) || 'none';
     const model = document.getElementById('modelSelect').value;
-    const resp = await fetch('/api/reading-list', {
+
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: selectedNode.id, name: selectedNode.name, path, children, model }),
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: READING_LIST_PROMPT(selectedNode.name, path, children, summary) }],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
     });
     if (!resp.ok) throw new Error(`${resp.status}: ${(await resp.text()).slice(0, 300)}`);
-    const data = await resp.json();
+    const payload = await resp.json();
+    const content = payload.choices[0].message.content;
+    const items = extractJsonArray(content);
+    const data = { topic: selectedNode.name, items: items || [], raw: content };
     lastReadingList = data;
 
     if (!data.items || data.items.length === 0) {
@@ -643,13 +707,14 @@ function exportReadingList() {
 // ============================================================
 // INIT
 // ============================================================
+(function () {
+  const input = document.getElementById('apiKeyInput');
+  input.value = localStorage.getItem('openrouter_key') || '';
+  input.addEventListener('change', () => localStorage.setItem('openrouter_key', input.value.trim()));
+})();
+
 loadData();
 loadModels();
-fetch('/api/health').then(r => r.json()).then(d => {
-  if (!d.openrouter_configured) {
-    document.getElementById('headerStats').textContent += ' · ⚠ OpenRouter key not configured on server';
-  }
-}).catch(() => {});
 </script>
 </body>
 </html>
